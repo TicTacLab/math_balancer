@@ -1,6 +1,7 @@
 (ns dev
  (:require [ns-tracker.core :refer [ns-tracker]]
-           [nginx.clojure.embed :as nginx]))
+           [nginx.clojure.embed :as nginx]
+           [math-balancer.handler :as handler]))
 
 (defonce server nil)
 
@@ -11,6 +12,7 @@
 (defn stop []
  (when server
   (nginx/stop-server)
+  (handler/stop-poll-future!)
   (alter-var-root #'server (fn [_] false))))
 
 (def ^:private modified-ns

@@ -1,14 +1,16 @@
 (ns math-balancer.handler
   (:require [nginx.clojure.core :as nginx]
             [org.httpkit.client :as http]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [clojure.tools.logging :as log]))
 
 (def ^:const uri-pattern #"/files/(?<model>.+)/(?<event>.+)/.*")
 
 (def state-atom (atom {:sessions {}
                        :counts {}
                        :cfg {:engines []
-                             :interval-ms nil}}))
+                             :interval-ms nil}
+                       :poll-future nil}))
 
 (defn max-sessions-count [state engine]
   (let [engines (get-in state [:cfg :engines])
@@ -20,14 +22,21 @@
       (update-in [:sessions] assoc session-id engine)
       (update-in [:counts engine] (fnil inc 0))))
 
+(defn- read-engine-response
+  [engine {:keys [body status error]}]
+  (if error
+    (log/error error "Network error occured")
+    {:engine      engine
+     :session-ids (if (not= status 200)
+                    (log/error "Invalid response" body)
+                    (try
+                      (get (json/parse-string body false) "data")
+                      (catch Exception e
+                        (log/error e "Failed to parse json response" body))))}))
+
 (defn sessions-check [state engine-reqs]
   (let [engine-sessions (for [[engine ids-req] engine-reqs]
-                          (let [{:keys [body status]} @ids-req]
-                            {:engine      engine
-                             :session-ids (when (= status 200)
-                                            (try
-                                              (get (json/parse-string body false) "data")
-                                              (catch Exception _ nil)))}))]
+                          (read-engine-response engine @ids-req))]
     (assoc state
       :sessions (into {} (for [{:keys [engine session-ids]} engine-sessions
                                session-id session-ids]
@@ -71,15 +80,16 @@
 (defn init-handler
   "nginx-clojure jvm init handler"
   [_]
-  (let [cfg (read-cfg "conf/math-balancer.json")]
-    (swap! state-atom assoc :cfg cfg)
-    (future
-      (loop []
-        (swap! state-atom poll-engines)
-        (prn "Health check")
-        (Thread/sleep (:poll-interval-ms cfg))
-        (recur))))
-  {:status 200})
+  (let [cfg (read-cfg "conf/math-balancer.json")
+        f (future
+            (loop []
+              (swap! state-atom poll-engines)
+              (log/info "Performed engines poll" (:counts @state-atom))
+              (Thread/sleep (:poll-interval-ms cfg))
+              (recur)))]
+    (swap! state-atom assoc :cfg cfg :poll-future f)
+    (log/info "Service launched using config" cfg)
+    {:status 200}))
 
 (defn handler [req]
   "nginx-clojure rewrite handler"
@@ -89,3 +99,6 @@
       (do
         (nginx/set-ngx-var! req "engine" (format "http://%s" engine-addr))
         nginx/phase-done))))
+
+(defn stop-poll-future! []
+  (future-cancel (:poll-future @state-atom)))

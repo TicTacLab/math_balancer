@@ -4,6 +4,9 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.7.0"]
+                 [ch.qos.logback/logback-core "1.1.3"]
+                 [ch.qos.logback/logback-classic "1.1.3"]
+                 [org.clojure/tools.logging "0.3.1"]
                  [nginx-clojure "0.4.2"]
                  [http-kit "2.1.18"]
                  [cheshire "5.5.0"]]
