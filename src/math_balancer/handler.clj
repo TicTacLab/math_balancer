@@ -5,12 +5,15 @@
 
 (def ^:const uri-pattern #"/files/(?<model>.+)/(?<event>.+)/.*")
 
-(def ^:const engines ["192.168.167.2:3000"])
+(def state-atom (atom {:sessions {}
+                       :counts {}
+                       :cfg {:engines []
+                             :interval-ms nil}}))
 
 (defn max-sessions-count [engine]
-  1)
-
-(def state-atom (atom {:sessions {} :counts {}}))
+  (let [engines (get-in @state-atom [:cfg :engines])
+        engine-entry (first (filter #(= engine (:server %)) engines))]
+    (:sessions-limit engine-entry)))
 
 (defn add-session [state session-id engine]
   (-> state
@@ -42,11 +45,14 @@
     e-id))
 
 (defn get-best-engine [state]
-  ""
   (when (not (empty? (:counts state)))
     (let [[engine s-count] (apply min-key val (:counts state))]
       (when (< s-count (max-sessions-count engine))
         engine))))
+
+(defn read-cfg [config-file]
+  (-> (slurp config-file)
+      (json/parse-string true)))
 
 (defn get-engine [uri]
   (let [event-id (get-event-id uri)
@@ -58,14 +64,17 @@
           (swap! state-atom add-session event-id new-engine))
         new-engine))))
 
-(defn init-handler [_]
+(defn init-handler
   "nginx-clojure jvm init handler"
-  (future
-    (loop []
-      (swap! state-atom sessions-check engines)
-      (prn "Health check")
-      (Thread/sleep 5000)
-      (recur)))
+  [_]
+  (let [cfg (read-cfg "conf/math-balancer.json")]
+    (swap! state-atom assoc :cfg cfg)
+    (future
+      (loop []
+        (swap! state-atom sessions-check (map :server (:engines cfg)))
+        (prn "Health check")
+        (Thread/sleep (:poll-interval-ms cfg))
+        (recur))))
   {:status 200})
 
 (defn handler [req]

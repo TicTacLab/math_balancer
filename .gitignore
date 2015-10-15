@@ -12,4 +12,5 @@ pom.xml.asc
 *.iml
 .idea
 /logs
+conf/math-balancer.json
 resources/nginx.conf

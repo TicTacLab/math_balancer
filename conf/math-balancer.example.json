@@ -1,0 +1,9 @@
+{
+  "engines": [
+    {
+      "server": "192.168.167.2:3000",
+      "sessions-limit": 1
+    }
+  ],
+  "poll-interval-ms": 5000
+}
