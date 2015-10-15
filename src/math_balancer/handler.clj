@@ -10,28 +10,23 @@
                        :cfg {:engines []
                              :interval-ms nil}}))
 
-(defn max-sessions-count [engine]
-  (let [engines (get-in @state-atom [:cfg :engines])
+(defn max-sessions-count [state engine]
+  (let [engines (get-in state [:cfg :engines])
         engine-entry (first (filter #(= engine (:server %)) engines))]
     (:sessions-limit engine-entry)))
 
 (defn add-session [state session-id engine]
   (-> state
       (update-in [:sessions] assoc session-id engine)
-      (update-in [:counts engine] inc)))
+      (update-in [:counts engine] (fnil inc 0))))
 
-(defn- engine-sessions [engine]
-  (http/get (format "http://%s/sessions" engine)))
-
-(defn sessions-check [state engines]
-  (let [session-reqs (doall (for [e engines]
-                             [e (engine-sessions e)]))
-        engine-sessions (for [[engine ids-req] session-reqs]
+(defn sessions-check [state engine-reqs]
+  (let [engine-sessions (for [[engine ids-req] engine-reqs]
                           (let [{:keys [body status]} @ids-req]
                             {:engine      engine
                              :session-ids (when (= status 200)
                                             (try
-                                              (:data (json/parse-string body true))
+                                              (get (json/parse-string body false) "data")
                                               (catch Exception _ nil)))}))]
     (assoc state
       :sessions (into {} (for [{:keys [engine session-ids]} engine-sessions
@@ -40,21 +35,30 @@
       :counts (into {} (for [{:keys [engine session-ids]} engine-sessions]
                          [engine (count session-ids)])))))
 
-(defn- get-event-id [uri]
+(defn poll-engines [state]
+  (let [engines (map :server (:engines (:cfg state)))
+        engine-reqs (doall
+                      (for [e engines]
+                        (let [url (format "http://%s/sessions" e)
+                              req (http/get url)]
+                          [e req])))]
+    (sessions-check state engine-reqs)))
+
+(defn get-event-id [uri]
   (let [[_ m-id e-id] (re-matches uri-pattern uri)]
     e-id))
 
 (defn get-best-engine [state]
   (when (not (empty? (:counts state)))
     (let [[engine s-count] (apply min-key val (:counts state))]
-      (when (< s-count (max-sessions-count engine))
+      (when (< s-count (max-sessions-count state engine))
         engine))))
 
 (defn read-cfg [config-file]
   (-> (slurp config-file)
       (json/parse-string true)))
 
-(defn get-engine [uri]
+(defn get-engine! [state-atom uri]
   (let [event-id (get-event-id uri)
         engine (get (:sessions @state-atom) event-id nil)]
     (if engine
@@ -71,7 +75,7 @@
     (swap! state-atom assoc :cfg cfg)
     (future
       (loop []
-        (swap! state-atom sessions-check (map :server (:engines cfg)))
+        (swap! state-atom poll-engines)
         (prn "Health check")
         (Thread/sleep (:poll-interval-ms cfg))
         (recur))))
@@ -79,7 +83,7 @@
 
 (defn handler [req]
   "nginx-clojure rewrite handler"
-  (let [engine-addr (get-engine (:uri req))]
+  (let [engine-addr (get-engine! state-atom (:uri req))]
     (if (nil? engine-addr)
       {:status 400 :body "No service available"}
       (do
