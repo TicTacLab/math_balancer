@@ -12,7 +12,8 @@
 (defn stop []
  (when server
   (nginx/stop-server)
-  (handler/stop-poll-future!)
+  (handler/stop-poll-timer!)
+  (handler/init-poll-timer!)
   (alter-var-root #'server (fn [_] false))))
 
 (def ^:private modified-ns

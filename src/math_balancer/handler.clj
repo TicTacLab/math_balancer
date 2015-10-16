@@ -1,4 +1,6 @@
 (ns math-balancer.handler
+  (:import java.util.Timer
+           java.util.TimerTask)
   (:require [nginx.clojure.core :as nginx]
             [org.httpkit.client :as http]
             [cheshire.core :as json]
@@ -7,11 +9,19 @@
 (def ^:const uri-pattern #"/files/(?<model>.+)/(?<event>.+)/.*")
 
 (def state-atom (atom {:sessions {}
-                       :counts {}
-                       :poll-future nil}))
+                       :counts {}}))
 
 (def cfg-atom (atom {:engines []
                      :interval-ms nil}))
+
+(def poll-timer (atom nil))
+
+(defn init-poll-timer! []
+  (reset! poll-timer (Timer. true)))
+
+(defn stop-poll-timer! []
+  (.cancel @poll-timer)
+  (.purge @poll-timer))
 
 (defn max-sessions-count [cfg engine-addr]
   (->> (:engines cfg)
@@ -70,18 +80,20 @@
 (defn get-assigned-engine [state event-id]
   (get-in state [:sessions event-id] nil))
 
+(defn poll-engines-task []
+  (proxy [TimerTask] []
+    (run []
+      (swap! state-atom poll-engines @cfg-atom)
+      (log/info "Performed engines poll" (:counts @state-atom)))))
+
 (defn init-handler
   "nginx-clojure jvm init handler"
   [_]
   (let [cfg (read-cfg "conf/math-balancer.json")
-        f (future
-            (loop []
-              (swap! state-atom poll-engines cfg)
-              (log/info "Performed engines poll" (:counts @state-atom))
-              (Thread/sleep (:poll-interval-ms cfg))
-              (recur)))]
+        interval (:poll-interval-ms cfg)]
     (reset! cfg-atom cfg)
-    (swap! state-atom assoc :poll-future f)
+    (init-poll-timer!)
+    (.scheduleAtFixedRate @poll-timer (poll-engines-task) (long 0) (long interval))
     (log/info "Service launched using config" cfg)
     {:status 200}))
 
@@ -101,6 +113,3 @@
             (swap! state-atom add-session event-id best-engine-addr)
             (proxy-pass req best-engine-addr))
           {:status 400, :body "No service available"})))))
-
-(defn stop-poll-future! []
-  (future-cancel (:poll-future @state-atom)))
