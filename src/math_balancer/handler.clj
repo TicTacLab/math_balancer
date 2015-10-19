@@ -46,20 +46,20 @@
               (log/error e "Failed to parse json response" body)))))
 
 (defn sessions-set [state [engine-addr id-resp]]
-  (let [resp (read-engine-response @id-resp)]
-    (if (nil? resp)
-      state
-      (let [{:keys [session-ids]} resp
-            sessions (into {} (map (fn [id] [id engine-addr]) session-ids))]
-        (-> state
-            (update-in [:sessions] merge sessions)
-            (assoc-in [:counts engine-addr] (count session-ids)))))))
+  (if-let [resp (read-engine-response @id-resp)]
+    (let [{:keys [session-ids]} resp
+          sessions (into {} (map (fn [id] [id engine-addr]) session-ids))]
+      (-> state
+          (update-in [:sessions] merge sessions)
+          (assoc-in [:counts engine-addr] (count session-ids))))
+    state))
 
 (defn poll-engines [state cfg]
   (if-let [responses (->> (:engines cfg)
                           (map :server)
                           (mapv (fn [addr]
-                                  [addr (http/get (format "http://%s/sessions" addr))]))
+                                  [addr (http/get (format "http://%s/sessions" addr)
+                                                  {:timeout (:poll-timeout-ms cfg)})]))
                           (not-empty))]
     (reduce
       sessions-set
