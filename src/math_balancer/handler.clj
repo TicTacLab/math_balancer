@@ -5,9 +5,8 @@
             [org.httpkit.client :as http]
             [cheshire.core :as json]
             [environ.core :refer [env]]
-            [clojure.tools.logging :as log]))
-
-(def ^:const uri-pattern #"/files/(?<model>.+)/(?<event>.+)/.*")
+            [clojure.tools.logging :as log]
+            [clojure.string :as s]))
 
 (def state-atom (atom {:sessions {}
                        :counts {}}))
@@ -71,9 +70,17 @@
   (-> (slurp config-file)
       (json/parse-string true)))
 
-(defn get-event-id [uri]
-  (let [[_ m-id e-id] (re-matches uri-pattern uri)]
-    e-id))
+(defn get-url [uri]
+  (let [[_ _ files model-id event-id action]
+        (s/split uri #"/")]
+    (if action
+      [files model-id event-id action]
+      [files model-id event-id])))
+
+(defn make-url [engine-addr req]
+  (let [url (s/join "/" (get-url req))
+        path (str "http://" engine-addr "/" url)]
+    path))
 
 (defn get-best-engine [state cfg]
   (when (not (empty? (:counts state)))
@@ -101,13 +108,16 @@
     (log/info "Service launched using config" cfg)
     {:status 200}))
 
+
+
 (defn proxy-pass [req engine-addr]
-  (nginx/set-ngx-var! req "engine" (format "http://%s%s" engine-addr (:uri req)))
+  (nginx/set-ngx-var! req "engine" (make-url engine-addr (:uri req)))
   nginx/phase-done)
 
 (defn handler [req]
   "nginx-clojure rewrite handler"
-  (let [event-id (get-event-id (:uri req))
+  (let [url  (->> req :uri get-url )
+        [_ _ event-id _] url
         engine-addr (get-assigned-engine @state-atom event-id)]
     (if engine-addr
       (proxy-pass req engine-addr)

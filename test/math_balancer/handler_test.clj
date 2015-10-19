@@ -38,8 +38,16 @@
 
 
 (deftest get-event-id-test
-  (is (= "event-id"
-         (get-event-id "/files/model/event-id/path"))))
+  (is (= ["files" "model" "event-id" "path" ]
+         (get-url "/api/files/model/event-id/path")))
+  (is (= ["files" "model" "event-id" ]
+         (get-url "/api/files/model/event-id"))))
+
+(deftest make-path-test
+  (is (= "http://some-addr:8080/files/model/event-id/path"
+         (make-url "some-addr:8080" "/api/files/model/event-id/path")))
+  (is (= "http://some-addr:8080/files/model/event-id"
+         (make-url "some-addr:8080" "/api/files/model/event-id"))))
 
 (deftest get-best-engine-test
   (let [state {:sessions {}
