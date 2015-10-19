@@ -4,6 +4,7 @@
   (:require [nginx.clojure.core :as nginx]
             [org.httpkit.client :as http]
             [cheshire.core :as json]
+            [environ.core :refer [env]]
             [clojure.tools.logging :as log]))
 
 (def ^:const uri-pattern #"/files/(?<model>.+)/(?<event>.+)/.*")
@@ -89,7 +90,7 @@
 (defn init-handler
   "nginx-clojure jvm init handler"
   [_]
-  (let [cfg (read-cfg "conf/math-balancer.json")
+  (let [cfg (read-cfg (get env :balancer-config))
         interval (:poll-interval-ms cfg)]
     (reset! cfg-atom cfg)
     (init-poll-timer!)

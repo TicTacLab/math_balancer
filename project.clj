@@ -9,11 +9,14 @@
                  [org.clojure/tools.logging "0.3.1"]
                  [nginx-clojure "0.4.2"]
                  [http-kit "2.1.18"]
-                 [cheshire "5.5.0"]]
+                 [cheshire "5.5.0"]
+                 [environ "1.0.1"]]
   :main ^:skip-aot math-balancer.core
   :target-path "target/%s"
   :repl-options {:init-ns user}
   :profiles {:dev {:source-paths ["dev"]
                    :dependencies [[nginx-clojure/nginx-clojure-embed "0.4.2"]
-                                  [ns-tracker "0.3.0"]]}
+                                  [ns-tracker "0.3.0"]]
+                   :plugins [[lein-environ "0.4.0"]]
+                   :env {:balancer-config "conf/math-balancer.json"}}
              :uberjar {:aot :all}})
