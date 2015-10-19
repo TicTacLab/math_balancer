@@ -41,16 +41,19 @@
     (not (nil? error)) (log/error error "Network error occured")
     (not= status 200) (log/error "Invalid response" body)
     :else (try
-            (get (json/parse-string body false) "data")
+            {:session-ids (get (json/parse-string body false) "data")}
             (catch Exception e
               (log/error e "Failed to parse json response" body)))))
 
 (defn sessions-set [state [engine-addr id-resp]]
-  (let [session-ids (read-engine-response @id-resp)
-        sessions (into {} (map (fn [id] [id engine-addr]) session-ids))]
-    (-> state
-        (update-in [:sessions] merge sessions)
-        (assoc-in [:counts engine-addr] (count session-ids)))))
+  (let [resp (read-engine-response @id-resp)]
+    (if (nil? resp)
+      state
+      (let [{:keys [session-ids]} resp
+            sessions (into {} (map (fn [id] [id engine-addr]) session-ids))]
+        (-> state
+            (update-in [:sessions] merge sessions)
+            (assoc-in [:counts engine-addr] (count session-ids)))))))
 
 (defn poll-engines [state cfg]
   (if-let [responses (->> (:engines cfg)
