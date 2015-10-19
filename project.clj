@@ -19,4 +19,5 @@
                                   [ns-tracker "0.3.0"]]
                    :plugins [[lein-environ "0.4.0"]]
                    :env {:balancer-config "conf/math-balancer.json"}}
-             :uberjar {:aot :all}})
+             :uberjar {:aot :all
+                       :env {:balancer-config "/etc/nginx/conf/math-balancer.json"}}})
