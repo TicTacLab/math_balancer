@@ -102,7 +102,7 @@
     {:status 200}))
 
 (defn proxy-pass [req engine-addr]
-  (nginx/set-ngx-var! req "engine" (format "http://%s/" engine-addr))
+  (nginx/set-ngx-var! req "engine" (format "http://%s%s" engine-addr (:uri req)))
   nginx/phase-done)
 
 (defn handler [req]
