@@ -13,7 +13,7 @@
 (def state-atom (atom {:sessions {}
                        :counts {}}))
 
-(defn polling-task
+(defn polling-task []
   (swap! state-atom engines/poll-engines @cfg-atom)
   (log/info "Performed engines poll" (:counts @state-atom)))
 
