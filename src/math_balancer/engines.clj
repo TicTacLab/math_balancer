@@ -16,12 +16,14 @@
       responses)
     (log/error "Poll error")))
 
+(defn has-alive-engines? [state]
+  (seq (:counts state)))
+
 (defn get-best-engine [state cfg]
-  (when (not (empty? (:counts state)))
+  (when (seq (:counts state))
     (let [[engine s-count] (apply min-key val (:counts state))]
       (when (< s-count (sessions/max-sessions-count cfg engine))
         engine))))
 
 (defn get-assigned-engine [state event-id]
   (get-in state [:sessions event-id] nil))
-
