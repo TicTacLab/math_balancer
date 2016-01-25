@@ -6,7 +6,8 @@
             [math-balancer.scheduler :as scheduler]
             [math-balancer.sessions :as sessions]
             [math-balancer.tools :as tools]
-            [math-balancer.engines :as engines]))
+            [math-balancer.engines :as engines]
+            [math-balancer.authorization :as auth]))
 
 (def cfg-atom (atom {:engines []
                      :interval-ms nil}))
@@ -39,6 +40,14 @@
                                        :errors [{:code    "STU"
                                                  :message "Service temporarily unavailable"}]})}))
 
+(def ^:const unauthorized-resp
+  (-> {:status  401
+       :headers {"Content-Type" "application/json"
+                 "WWW-Authenticate" "Basic realm=\"mengine\""}
+       :body    (json/generate-string {:status 401
+                                       :errors [{:code    "UAR"
+                                                 :message "Unauthorized request"}]})}))
+
 (def ^:const session-limit-exceeded-resp
   (-> {:status  400
        :headers {"Content-Type" "application/json"}
@@ -51,12 +60,14 @@
   (let [url  (->> req :uri tools/get-url )
         [_ _ event-id _] url
         engine-addr (engines/get-assigned-engine @state-atom event-id)]
-    (if engine-addr
-      (proxy-pass req engine-addr)
-      (if-not (engines/has-alive-engines? @state-atom)
-        service-unavailable-resp
-        (if-let [best-engine-addr (engines/get-best-engine @state-atom @cfg-atom)]
-          (do
-            (swap! state-atom sessions/add-session event-id best-engine-addr)
-            (proxy-pass req best-engine-addr))
-          session-limit-exceeded-resp)))))
+    (if (auth/check-credentials (-> req :headers (get "Authorization")))
+      (if engine-addr
+        (proxy-pass req engine-addr)
+        (if-not (engines/has-alive-engines? @state-atom)
+          service-unavailable-resp
+          (if-let [best-engine-addr (engines/get-best-engine @state-atom @cfg-atom)]
+            (do
+              (swap! state-atom sessions/add-session event-id best-engine-addr)
+              (proxy-pass req best-engine-addr))
+            session-limit-exceeded-resp)))
+      unauthorized-resp)))
