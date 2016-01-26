@@ -1,10 +1,22 @@
 {
   "engines": [
     {
-      "server": "192.168.167.2:3000",
-      "sessions-limit": 1
+      "server": "192.168.1.23:3000",
+      "sessions-limit": 3
     }
   ],
   "poll-interval-ms": 5000,
-  "poll-timeout-ms": 1000
+  "poll-timeout-ms": 1000,
+
+  "white-list-ttl": 900,
+  "black-list-ttl": 900,
+
+  "storage-keyspace": "malt",
+  "storage-nodes": [
+    "192.168.167.144",
+    "192.168.167.145",
+    "192.168.167.146"
+  ],
+  "storage-password": "CacNeck5",
+  "storage-user": "malt"
 }

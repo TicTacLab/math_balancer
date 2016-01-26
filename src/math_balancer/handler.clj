@@ -15,9 +15,36 @@
 (def state-atom (atom {:sessions {}
                        :counts {}}))
 
+(def system (atom nil))
+
 (defn polling-task []
   (swap! state-atom engines/poll-engines @cfg-atom)
   (log/info "Performed engines poll" (:counts @state-atom)))
+
+#_(defn -main [& _args]
+  (try
+    (swap! system #(if % % (component/start (s/new-system (c/config)))))
+    (println "MathAdmin is started!")
+    (catch Exception e
+      (println e)
+      (log/error e "Exception during startup. Fix configuration and
+                    start application using REST configuration interface")))
+  (swap! noilly-srv
+         (fn [srv]
+           (if srv
+             srv
+             (noilly/start c/cfg
+                           #(swap! system
+                                   (fn [s]
+                                     (when s (component/stop s))
+                                     (c/load-config)
+                                     (component/start (s/new-system (c/config)))))))))
+  (.. Runtime
+      (getRuntime)
+      (addShutdownHook (Thread. (fn []
+                                  (do
+                                    (component/stop @system)
+                                    (noilly/stop @noilly-srv)))))))
 
 (defn init-handler
   "nginx-clojure jvm init handler"
@@ -55,19 +82,30 @@
                                        :errors [{:code    "SLE"
                                                  :message "Sessions limit exceeded"}]})}))
 
-(defn handler [req]
-  "nginx-clojure rewrite handler"
+
+(defn handle-request [req]
   (let [url  (->> req :uri tools/get-url )
         [_ _ event-id _] url
         engine-addr (engines/get-assigned-engine @state-atom event-id)]
-    (if (auth/check-credentials (-> req :headers (get "Authorization")))
-      (if engine-addr
-        (proxy-pass req engine-addr)
-        (if-not (engines/has-alive-engines? @state-atom)
-          service-unavailable-resp
-          (if-let [best-engine-addr (engines/get-best-engine @state-atom @cfg-atom)]
-            (do
-              (swap! state-atom sessions/add-session event-id best-engine-addr)
-              (proxy-pass req best-engine-addr))
-            session-limit-exceeded-resp)))
-      unauthorized-resp)))
+    (if engine-addr
+      (proxy-pass req engine-addr)
+      (if-not (engines/has-alive-engines? @state-atom)
+        service-unavailable-resp
+        (if-let [best-engine-addr (engines/get-best-engine @state-atom @cfg-atom)]
+          (do
+            (swap! state-atom sessions/add-session event-id best-engine-addr)
+            (proxy-pass req best-engine-addr))
+          session-limit-exceeded-resp)))))
+
+(defn handler [req]
+  "nginx-clojure rewrite handler"
+  (let [url  (->> req :uri tools/get-url )
+        [_ _ _ action] url
+        [auth-type creds] (auth/extract-request-credentials req)
+        auth (:auth dev/system)]
+    (cond
+      (nil? creds) unauthorized-resp
+      (auth/white-listed? auth creds) (handle-request req)
+      (auth/black-listed? auth creds) unauthorized-resp
+      (auth/check-credentials auth action auth-type creds) (handle-request req)
+      :else unauthorized-resp)))
