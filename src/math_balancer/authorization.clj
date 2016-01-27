@@ -26,39 +26,46 @@
   (println "white-listed?" creds (get @(:white-list auth) creds) @(:white-list auth))
   (get @(:white-list auth) creds))
 
+(defn white-list! [auth creds]
+  (println "white-listing" creds (:white-list auth))
+  (swap! (:white-list auth) assoc creds true))
+
 (defn black-listed? [auth creds]
-  (println "black-listed? STUB" creds))                             ;; guest:guest
+  (get @(:black-list auth) creds))
 
 (defn black-list! [auth creds]
-  (println "black-list! STUB" creds))
+  (swap! (:black-list auth) assoc creds true))
 
-(defn white-list! [auth creds]
-  (swap! (:white-list auth) assoc creds true)
-  (println "white-listing" creds (:white-list auth)))
+(defn check-session-creds [auth creds]
+  (let [session-id (decode-base64-str creds)]
+    (and (seq session-id )
+         (storage/check-session (:storage auth) session-id))))
 
-(defn check-basic-auth [auth creds async?]
+(defn check-user-creds [auth creds]
   (let [[login password] (-> creds
                              (decode-base64-str)
-                             (parse-login-password))
-        valid-creds? (storage/check-login-password (:storage auth) login password)]
-    (if valid-creds?
-      (white-list! auth creds)
-      (black-list! auth creds))
-    valid-creds?))
+                             (parse-login-password))]
+    (and login
+         password
+         (storage/check-login-password (:storage auth) login password))))
 
-(defn check-betengines-auth [auth creds async?]
-  (let [session-id (decode-base64-str creds)
-        valid-creds? (storage/check-session (:storage auth) session-id)]
+(defn validate-credentials [auth auth-type creds]
+  (let [valid-creds? (case auth-type
+                       :basic (check-user-creds auth creds)
+                       :betengines (check-session-creds auth creds)
+                       false)]
     (if valid-creds?
       (white-list! auth creds)
       (black-list! auth creds))
     valid-creds?))
 
 (defn check-credentials [auth action auth-type creds]
-  (case auth-type
-    :basic (check-basic-auth auth creds (async-action? action))
-    :betengines (check-betengines-auth auth creds (async-action? action))
-    false))
+  (if (async-action? action)
+    (do (.start
+          (Thread. (fn [] (validate-credentials auth auth-type creds))))
+        true)
+    (validate-credentials auth auth-type creds)))
+
 
 (defrecord Auth [white-list
                  white-list-ttl
@@ -69,8 +76,8 @@
   (start [component]
     (log/info "Auth started")
     (assoc component
-      :white-list (atom (cache/ttl-cache-factory {} :ttl white-list-ttl))
-      :black-list (atom (cache/ttl-cache-factory {} :ttl black-list-ttl))))
+      :white-list (atom {}  #_(cache/ttl-cache-factory {} :ttl white-list-ttl))
+      :black-list (atom {}  #_(cache/ttl-cache-factory {} :ttl black-list-ttl))))
 
   (stop [component]
     (log/info "Auth stopped")

@@ -7,7 +7,10 @@
             [math-balancer.sessions :as sessions]
             [math-balancer.tools :as tools]
             [math-balancer.engines :as engines]
-            [math-balancer.authorization :as auth]))
+            [math-balancer.authorization :as auth]
+            [math-balancer.config :as c]
+            [math-balancer.system :as s]
+            [com.stuartsierra.component :as component]))
 
 (def cfg-atom (atom {:engines []
                      :interval-ms nil}))
@@ -15,7 +18,16 @@
 (def state-atom (atom {:sessions {}
                        :counts {}}))
 
-(def system (atom nil))
+(def system nil)
+
+(defn start-system []
+  (c/load-config)
+  (alter-var-root #'system (constantly (s/new-system (c/config))))
+  (alter-var-root #'system component/start))
+
+(defn stop-system []
+  (when system
+    (alter-var-root #'system component/stop)))
 
 (defn polling-task []
   (swap! state-atom engines/poll-engines @cfg-atom)
@@ -46,15 +58,7 @@
                                     (component/stop @system)
                                     (noilly/stop @noilly-srv)))))))
 
-(defn init-handler
-  "nginx-clojure jvm init handler"
-  [_]
-  (let [cfg (tools/read-cfg (get env :balancer-config))
-        interval (:poll-interval-ms cfg)]
-    (reset! cfg-atom cfg)
-    (scheduler/run-scheduler polling-task interval)
-    (log/info "Service launched using config" cfg)
-    {:status 200}))
+
 
 (defn proxy-pass [req engine-addr]
   (nginx/set-ngx-var! req "engine" (tools/make-url engine-addr (:uri req)))
@@ -82,6 +86,16 @@
                                        :errors [{:code    "SLE"
                                                  :message "Sessions limit exceeded"}]})}))
 
+(defn init-handler
+  "nginx-clojure jvm init handler"
+  [_]
+  (let [cfg (tools/read-cfg (get env :balancer-config))
+        interval (:poll-interval-ms cfg)]
+    (start-system)
+    (reset! cfg-atom cfg)
+    (scheduler/run-scheduler polling-task interval)
+    (log/info "Service launched using config" cfg)
+    {:status 200}))
 
 (defn handle-request [req]
   (let [url  (->> req :uri tools/get-url )
@@ -102,7 +116,7 @@
   (let [url  (->> req :uri tools/get-url )
         [_ _ _ action] url
         [auth-type creds] (auth/extract-request-credentials req)
-        auth (:auth dev/system)]
+        auth (:auth system)]
     (cond
       (nil? creds) unauthorized-resp
       (auth/white-listed? auth creds) (handle-request req)

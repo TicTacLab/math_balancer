@@ -2,29 +2,16 @@
   (:require [ns-tracker.core :refer [ns-tracker]]
             [nginx.clojure.embed :as nginx]
             [math-balancer.scheduler :as scheduler]
-            [math-balancer.system :as s]
-            [math-balancer.config :as c]
-            [com.stuartsierra.component :as component]))
+            [math-balancer.handler :as handler]))
 
 (defonce server nil)
-(defonce system nil)
-
-(defn init []
- (c/load-config)
- (alter-var-root #'system (constantly (s/new-system (c/config)))))
 
 (defn start []
   (nginx/run-server "resources/nginx.conf")
-  (alter-var-root #'server (fn [_] true))
-  (alter-var-root #'system component/start))
-
-(defn go []
-  (init)
-  (start))
+  (alter-var-root #'server (fn [_] true)))
 
 (defn stop []
-  (when system
-    (alter-var-root #'system component/stop))
+  (handler/stop-system)                                     ;; system starting is in init-handler
   (when server
     (nginx/stop-server)
     (scheduler/stop-poll-timer!)
@@ -41,4 +28,4 @@
 (defn reset []
  (stop)
  (reload-ns)
- (go))
+ (start))
