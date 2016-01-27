@@ -23,15 +23,13 @@
 (def async-action? #{"calculate" "profile"})
 
 (defn white-listed? [auth creds]
-  (println "white-listed?" creds (get @(:white-list auth) creds) @(:white-list auth))
-  (get @(:white-list auth) creds))
+  (contains? @(:white-list auth) creds))
 
 (defn white-list! [auth creds]
-  (println "white-listing" creds (:white-list auth))
   (swap! (:white-list auth) assoc creds true))
 
 (defn black-listed? [auth creds]
-  (get @(:black-list auth) creds))
+  (contains? @(:black-list auth) creds))
 
 (defn black-list! [auth creds]
   (swap! (:black-list auth) assoc creds true))
@@ -76,8 +74,8 @@
   (start [component]
     (log/info "Auth started")
     (assoc component
-      :white-list (atom {}  #_(cache/ttl-cache-factory {} :ttl white-list-ttl))
-      :black-list (atom {}  #_(cache/ttl-cache-factory {} :ttl black-list-ttl))))
+      :white-list (atom (cache/ttl-cache-factory {} :ttl (* 1000 white-list-ttl)))
+      :black-list (atom (cache/ttl-cache-factory {} :ttl (* 1000 black-list-ttl)))))
 
   (stop [component]
     (log/info "Auth stopped")

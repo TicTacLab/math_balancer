@@ -33,33 +33,6 @@
   (swap! state-atom engines/poll-engines @cfg-atom)
   (log/info "Performed engines poll" (:counts @state-atom)))
 
-#_(defn -main [& _args]
-  (try
-    (swap! system #(if % % (component/start (s/new-system (c/config)))))
-    (println "MathAdmin is started!")
-    (catch Exception e
-      (println e)
-      (log/error e "Exception during startup. Fix configuration and
-                    start application using REST configuration interface")))
-  (swap! noilly-srv
-         (fn [srv]
-           (if srv
-             srv
-             (noilly/start c/cfg
-                           #(swap! system
-                                   (fn [s]
-                                     (when s (component/stop s))
-                                     (c/load-config)
-                                     (component/start (s/new-system (c/config)))))))))
-  (.. Runtime
-      (getRuntime)
-      (addShutdownHook (Thread. (fn []
-                                  (do
-                                    (component/stop @system)
-                                    (noilly/stop @noilly-srv)))))))
-
-
-
 (defn proxy-pass [req engine-addr]
   (nginx/set-ngx-var! req "engine" (tools/make-url engine-addr (:uri req)))
   nginx/phase-done)
