@@ -72,8 +72,6 @@
     {:status 200}))
 
 (defn handle-request [req]
-  (mark! req-rate)
-
   (let [url  (->> req :uri tools/get-url )
         [_ _ event-id _] url
         engine-addr (engines/get-assigned-engine @state-atom event-id)]
@@ -89,6 +87,8 @@
 
 (defn handler [req]
   "nginx-clojure rewrite handler"
+  (mark! req-rate)
+
   (let [url  (->> req :uri tools/get-url )
         [_ _ _ action] url
         [auth-type creds] (auth/extract-request-credentials req)
