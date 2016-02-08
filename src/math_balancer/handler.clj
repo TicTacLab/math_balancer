@@ -1,7 +1,6 @@
 (ns math-balancer.handler
   (:require [nginx.clojure.core :as nginx]
             [cheshire.core :as json]
-            [environ.core :refer [env]]
             [clojure.tools.logging :as log]
             [math-balancer.scheduler :as scheduler]
             [math-balancer.sessions :as sessions]
