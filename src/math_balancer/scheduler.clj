@@ -9,8 +9,9 @@
   (reset! poll-timer (Timer. true)))
 
 (defn stop-poll-timer! []
-  (.cancel @poll-timer)
-  (.purge @poll-timer))
+  (when @poll-timer
+    (.cancel @poll-timer)
+    (.purge @poll-timer)))
 
 (defn poll-engines-task [task]
   (proxy [TimerTask] []

@@ -12,16 +12,12 @@
             [math-balancer.system :as s]
             [com.stuartsierra.component :as component]))
 
-(def cfg-atom (atom {:engines []
-                     :interval-ms nil}))
-
 (def state-atom (atom {:sessions {}
                        :counts {}}))
 
 (def system nil)
 
 (defn start-system []
-  (c/load-config)
   (alter-var-root #'system (constantly (s/new-system (c/config))))
   (alter-var-root #'system component/start))
 
@@ -30,7 +26,7 @@
     (alter-var-root #'system component/stop)))
 
 (defn polling-task []
-  (swap! state-atom engines/poll-engines @cfg-atom)
+  (swap! state-atom engines/poll-engines (c/config))
   (log/info "Performed engines poll" (:counts @state-atom)))
 
 (defn proxy-pass [req engine-addr]
@@ -62,12 +58,11 @@
 (defn init-handler
   "nginx-clojure jvm init handler"
   [_]
-  (let [cfg (tools/read-cfg (get env :balancer-config))
-        interval (:poll-interval-ms cfg)]
+  (c/load-config)
+  (let [interval (:poll-interval-ms (c/config))]
     (start-system)
-    (reset! cfg-atom cfg)
     (scheduler/run-scheduler polling-task interval)
-    (log/info "Service launched using config" cfg)
+    (log/info "Service launched using config" (c/config))
     {:status 200}))
 
 (defn handle-request [req]
@@ -78,7 +73,7 @@
       (proxy-pass req engine-addr)
       (if-not (engines/has-alive-engines? @state-atom)
         service-unavailable-resp
-        (if-let [best-engine-addr (engines/get-best-engine @state-atom @cfg-atom)]
+        (if-let [best-engine-addr (engines/get-best-engine @state-atom (c/config))]
           (do
             (swap! state-atom sessions/add-session event-id best-engine-addr)
             (proxy-pass req best-engine-addr))
