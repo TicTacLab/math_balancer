@@ -11,10 +11,10 @@
             [math-balancer.system :as s]
             [com.stuartsierra.component :as component]
             [metrics.reporters.jmx :as jmx]
-            [metrics.meters :refer [mark! defmeter]]))
+            [metrics.meters :refer [mark! meter]]))
 
 (def jmx-reporter (jmx/reporter {}))
-(def req-rate (defmeter ["math_balancer" "req_rate"]))
+(def req-rate (meter ["math_balancer" "req_rate"]))
 
 
 (def state-atom (atom {:sessions {}
