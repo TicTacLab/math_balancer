@@ -15,7 +15,8 @@
                  [clojurewerkz/scrypt "1.2.0"]
                  [prismatic/schema "1.0.1"]
                  [com.stuartsierra/component "0.2.3"]
-                 [org.clojure/core.cache "0.6.4"]]
+                 [org.clojure/core.cache "0.6.4"]
+                 [metrics-clojure "2.6.1"]]
   :main ^:skip-aot math-balancer.core
   :target-path "target/%s"
   :repl-options {:init-ns user}

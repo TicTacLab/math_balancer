@@ -9,7 +9,13 @@
             [math-balancer.authorization :as auth]
             [math-balancer.config :as c]
             [math-balancer.system :as s]
-            [com.stuartsierra.component :as component]))
+            [com.stuartsierra.component :as component]
+            [metrics.reporters.jmx :as jmx]
+            [metrics.meters :refer [mark! defmeter]]))
+
+(def jmx-reporter (jmx/reporter {}))
+(def req-rate (defmeter ["math_balancer" "req_rate"]))
+
 
 (def state-atom (atom {:sessions {}
                        :counts {}}))
@@ -57,6 +63,7 @@
 (defn init-handler
   "nginx-clojure jvm init handler"
   [_]
+  (jmx/start jmx-reporter)
   (c/load-config)
   (let [interval (:poll-interval-ms (c/config))]
     (start-system)
@@ -65,6 +72,8 @@
     {:status 200}))
 
 (defn handle-request [req]
+  (mark! req-rate)
+
   (let [url  (->> req :uri tools/get-url )
         [_ _ event-id _] url
         engine-addr (engines/get-assigned-engine @state-atom event-id)]
