@@ -10,7 +10,8 @@
             [clojure.set :refer [rename-keys]])
   (:import (java.util UUID))
   (:import [com.datastax.driver.core.exceptions NoHostAvailableException]
-           (java.util UUID)))
+           (java.util UUID)
+           (com.datastax.driver.core.policies DCAwareRoundRobinPolicy)))
 
 
 (defn check-session [{conn :conn :as auth} session-id]
@@ -44,7 +45,8 @@
                     storage-nodes
                     storage-keyspace
                     storage-user
-                    storage-password]
+                    storage-password
+                    storage-default-dc]
   component/Lifecycle
 
   (start [component]
@@ -52,9 +54,10 @@
                                   1000
                                   storage-nodes
                                   storage-keyspace
-                                  {:credentials         {:username storage-user
-                                                         :password storage-password}
-                                   :reconnection-policy (cp/constant-reconnection-policy 100)})]
+                                  {:credentials           {:username storage-user
+                                                           :password storage-password}
+                                   :reconnection-policy   (cp/constant-reconnection-policy 100)
+                                   :load-balancing-policy (DCAwareRoundRobinPolicy. storage-default-dc 2)})]
       (log/info "Storage started")
       (assoc component :conn conn)))
 
@@ -70,6 +73,7 @@
   {:storage-nodes    [s/Str]
    :storage-keyspace s/Str
    :storage-user     s/Str
+   :storage-default-dc s/Str
    :storage-password s/Str})
 
 (defn new-storage [m]
