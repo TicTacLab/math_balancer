@@ -11,13 +11,8 @@
   "white-list-ttl": 900,
   "black-list-ttl": 900,
 
-  "storage-keyspace": "malt",
-  "storage-nodes": [
-    "192.168.167.144",
-    "192.168.167.145",
-    "192.168.167.146"
-  ],
-  "storage-password": "CacNeck5",
-  "storage-user": "malt",
-  "storage-default-dc": "DC01"
+  "storage-host": "192.168.167.143",
+  "storage-user": "postgres",
+  "storage-pass": "WoonsAkAbIc6",
+  "storage-db": "math_engine"
 }

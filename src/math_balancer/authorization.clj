@@ -37,7 +37,7 @@
 (defn check-session-creds [auth creds]
   (let [session-id (decode-base64-str creds)]
     (and (seq session-id )
-         (storage/check-session (:storage auth) session-id))))
+         (storage/is-valid-session? (:storage auth) session-id))))
 
 (defn check-user-creds [auth creds]
   (let [[login password] (-> creds
